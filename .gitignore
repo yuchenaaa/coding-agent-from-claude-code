@@ -1,0 +1,6 @@
+.env
+.mini-session.json
+node_modules/
+dist/
+.vscode/
+AGENTS.md
