@@ -18,19 +18,20 @@ export class Agent {
   async chat(userText:string):Promise<void> {
     this.messages.push({"role":"user","content":userText})
     while (true){
-      const reply = await this.client.messages.create({
+      const messageStream = this.client.messages.stream({
         model : MODEL,
-        max_tokens: 4096,
-        system: buildSystemPrompt(),
-        tools: toolDefinitions,
-        messages: this.messages,
-      }
-      )
+        max_tokens : 4096,
+        system : buildSystemPrompt(),
+        tools : toolDefinitions,
+        messages : this.messages
+      })
+      messageStream.on("text",(textDelta)=>{process.stdout.write(textDelta)})
+      const reply = await messageStream.finalMessage()
+      process.stdout.write("\n")
+
       const toolUses:Anthropic.ToolUseBlock[] = []
       for (const block of reply.content){
-        if (block.type==="text"){
-          console.log(block.text)
-        } else if(block.type === "tool_use"){
+        if(block.type === "tool_use"){
           toolUses.push(block)
         }
       }
