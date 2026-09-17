@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { loadSession } from "./session.js";
 import * as readline from "node:readline"
 import Anthropic from "@anthropic-ai/sdk";
+import { getSkillByName,resolveSkillPrompt, SkillDefinition } from "./skills.js";
 
 export async function runCli(messages:string[] = process.argv.slice(2)){
     const agent = new Agent()
@@ -15,8 +16,16 @@ export async function runCli(messages:string[] = process.argv.slice(2)){
         }
     }
     const userMessage = messages.join(" ").trim()
+    let finalMessage = userMessage
     if (userMessage){
-        await agent.chat(userMessage)
+        if (userMessage.startsWith("/")){
+            const spaceIndex = userMessage.indexOf(" ")
+            const skillName = userMessage.slice(1,spaceIndex)
+            const args = userMessage.slice(spaceIndex+1)
+            const skillDefinition = getSkillByName(skillName)
+            finalMessage = resolveSkillPrompt(skillDefinition as SkillDefinition,args)
+        }
+        await agent.chat(finalMessage)
         const history = agent.history()
         saveSession(history)
     } else {
@@ -39,7 +48,15 @@ export async function runCli(messages:string[] = process.argv.slice(2)){
                         console.log("历史记录已清空")
                     }
                     else if (text){
-                        await agent.chat(text)
+                        let finalText = text
+                        if (text.startsWith("/")){
+                            const spaceIndex = text.indexOf(" ")
+                            const skillName = text.slice(1,spaceIndex)
+                            const args = text.slice(spaceIndex+1)
+                            const skillDefinition = getSkillByName(skillName)
+                            finalText = resolveSkillPrompt(skillDefinition as SkillDefinition,args)
+                        }
+                        await agent.chat(finalText)
                         saveSession(agent.history())
                     }
                     rlLoop()

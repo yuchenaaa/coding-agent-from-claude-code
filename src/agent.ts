@@ -7,6 +7,8 @@ import { mkdirSync,writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { recallMemories } from "./memory.js";
+import { buildSkillDescription } from "./skills.js";
+
 
 const MODEL =
   process.env.DEEPSEEK_MODEL ?? "deepseek-v4-flash";
@@ -32,7 +34,7 @@ export class Agent {
       const messageStream = this.client.messages.stream({
         model : MODEL,
         max_tokens : 4096,
-        system : buildSystemPrompt() + "\n\n" + userMemory,
+        system : buildSystemPrompt() + "\n\n" + userMemory + "\n\n" + buildSkillDescription(),
         tools : toolDefinitions,
         messages : this.messages
       })

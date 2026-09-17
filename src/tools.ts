@@ -3,6 +3,7 @@ import { readFileSync,writeFileSync,mkdirSync,readdirSync,statSync, Stats } from
 import { dirname,join } from "node:path";
 import { glob } from "glob";
 import { execFileSync,execSync } from "node:child_process";
+import { executeSkill } from "./skills.js";
 
 
 export const toolDefinitions : Anthropic.Tool[] = [
@@ -108,6 +109,24 @@ export const toolDefinitions : Anthropic.Tool[] = [
                 }
             },
             "required" : ["command"]
+        }
+    },
+    {
+        "name" : "skill",
+        "description" : "按名称调用已注册技能",
+        "input_schema" : {
+            "type" : "object",
+            "properties" : {
+                "skill_name" : {
+                    "type" : "string",
+                    "description" : "想要调用的技能的名字"
+                },
+                "args" : {
+                    "type" : "string",
+                    "description" : "本次任务的要求"
+                } 
+            },
+            "required" : ["skill_name"]
         }
     }
 ]
@@ -259,6 +278,13 @@ function runShell(input:{command:string}):string{
     }
 }
 
+function runSkillTool(input:{skill_name:string,args?:string}):string{
+    const skill  = executeSkill(input.skill_name,input.args??"")
+    if (skill){
+        return `已启动skill${input.skill_name},内容为:${skill.prompt}`
+    } else {return `未找到技能${input.skill_name}`}
+}
+
 
 
 
@@ -277,6 +303,8 @@ export async function executeTool(toolName:string,input:Record<string,any>) : Pr
             return grepSearch(input as {pattern :string,path?:string})
         case "run_shell":
             return runShell(input as {command : string})
+        case "skill":
+            return runSkillTool(input as {skill_name:string,args?:string})
         default:
             return `错误，工具名称为：${toolName}`
     }
