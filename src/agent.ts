@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { recallMemories } from "./memory.js";
 import { buildSkillDescription } from "./skills.js";
+import { connectMcp,McpConnection } from "./mcp.js";
 
 
 const MODEL =
@@ -17,6 +18,7 @@ export class Agent {
   private client: Anthropic;
   private messages: Anthropic.MessageParam[] = [];
   private estimateContextTokens : number = 0;
+  private mcp : McpConnection | null = null;
 
   constructor() {
     this.client = new Anthropic({
@@ -28,20 +30,26 @@ export class Agent {
 
     this.messages.push({"role":"user","content":userText})
     await this.checkAndCompact()
-
+    await this.ensureMcp()
+    const mcpTool = this.mcp?.tools.map((tool)=>{
+      return {
+        name : `mcp__demo__${tool.name}`,
+        description : tool.description,
+        input_schema : tool.input_schema as Anthropic.Tool["input_schema"]
+      }}) ?? []
+    const allTools = [...toolDefinitions,...mcpTool]
     while (true){
       let userMemory =recallMemories(userText)
       const messageStream = this.client.messages.stream({
         model : MODEL,
         max_tokens : 4096,
         system : buildSystemPrompt() + "\n\n" + userMemory + "\n\n" + buildSkillDescription(),
-        tools : toolDefinitions,
+        tools : allTools,
         messages : this.messages
       })
       messageStream.on("text",(textDelta)=>{process.stdout.write(textDelta)})
       const reply:Anthropic.Message = await messageStream.finalMessage()
       process.stdout.write("\n")
-
       this.estimateContextTokens = reply.usage.input_tokens + (reply.usage.cache_read_input_tokens ?? 0) + (reply.usage.cache_creation_input_tokens ?? 0) + reply.usage.output_tokens
       const toolUses:Anthropic.ToolUseBlock[] = []
       for (const block of reply.content){
@@ -55,6 +63,15 @@ export class Agent {
       }
       const toolResults:Anthropic.ToolResultBlockParam[] = []
       for (const toolUse of toolUses){
+        if (toolUse.name.startsWith("mcp__")){
+          const toolName = toolUse.name.split("__").slice(2).join("__")
+          toolResults.push({
+            "type" : "tool_result",
+            "tool_use_id" : toolUse.id,
+            "content" : this.mcp ? await this.mcp.callTool(toolName,toolUse.input) : "未连接MCP服务器"
+          })
+          continue
+        }
         const permissionResult = checkPermission(toolUse.name,toolUse.input as Record<string,any>)
         if (permissionResult === "allow"){
         let toolResult = await executeTool(toolUse.name,toolUse.input as Record<string,any>)
@@ -75,6 +92,21 @@ export class Agent {
       this.messages.push({"role": "user","content":toolResults})
     }
   };
+
+  private async ensureMcp():Promise<void>{
+    if (this.mcp){
+      return
+    } else if (process.env.MINI_MCP_SERVER == null){
+      return
+    } else {
+      this.mcp = await connectMcp("node",[process.env.MINI_MCP_SERVER])
+    }
+  }
+
+  close():void{
+    this.mcp?.close()
+  }
+
   history():Anthropic.MessageParam[]{
     return this.messages
   };

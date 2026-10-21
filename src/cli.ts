@@ -66,6 +66,7 @@ export async function runCli(messages:string[] = process.argv.slice(2)){
         }
         )
 }
+    agent.close()
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href){
